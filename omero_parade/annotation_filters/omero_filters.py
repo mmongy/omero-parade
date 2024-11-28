@@ -23,7 +23,7 @@ from omero_parade.utils import get_well_ids, get_project_image_ids
 
 
 def get_filters(request, conn):
-    return ["Rating", "Comment", "Tag", "Key_Value"]
+    return ["Rating", "Comment", "Tag", "Key_Value", "Dataset Key_Value"]
 
 
 def get_script(request, script_name, conn):
@@ -181,16 +181,16 @@ def get_script(request, script_name, conn):
         # and a params object of {'paramName': value}
         # and should return true or false
         f = """
-(function filter(data, params) {
-    var map_values = %s;
-    var key_placeholder = "%s";
-    if (params.key === key_placeholder) return true;
-    if (map_values[params.key] && map_values[params.key][data.%s]) {
-        var match = map_values[params.key][data.%s].indexOf(params.query) > -1;
-        return (params.query === '' || match);
-    }
-    return false;
-})
+            (function filter(data, params) {
+                var map_values = %s;
+                var key_placeholder = "%s";
+                if (params.key === key_placeholder) return true;
+                if (map_values[params.key] && map_values[params.key][data.%s]) {
+                    var match = map_values[params.key][data.%s].indexOf(params.query) > -1;
+                    return (params.query === '' || match);
+                }
+                    return false;
+            })
         """ % (json.dumps(map_values), key_placeholder, js_object_attr,
                js_object_attr)
 
@@ -208,4 +208,54 @@ def get_script(request, script_name, conn):
             {
                 'f': f,
                 'params': filter_params,
+            }
+        )
+        
+    if script_name == "Dataset Key_Value":
+        query = """select oal from %sAnnotationLink as oal
+            left outer join oal.child as ch
+            left outer join fetch oal.parent as pa
+            where pa.id in (:ids) and ch.class=MapAnnotation""" % dtype
+        links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
+        # Dict of {'key': {iid: 'value', iid: 'value'}}
+        map_values = defaultdict(dict)
+        for link in links:
+            iid = link.parent.id.val
+            for kv in link.child.getMapValue():
+                map_values[kv.name][iid] = kv.value
+
+        key_placeholder = "Pick key..."
+        # Return a JS function that will be passed a data object
+        # e.g. {'type': 'Image', 'id': 1}
+        # and a params object of {'paramName': value}
+        # and should return true or false
+        f = """
+            (function filter(data, params) {
+                var map_values = %s;
+                var key_placeholder = "%s";
+                if (params.key === key_placeholder) return true;
+                if (map_values[params.key] && map_values[params.key][data.%s]) {
+                    var match = map_values[params.key][data.%s].indexOf(params.query) > -1;
+                    return (params.query === '' || match);
+                }
+                    return false;
             })
+        """ % (json.dumps(map_values), key_placeholder, js_object_attr,
+               js_object_attr)
+
+        keys = list(map_values.keys())
+        keys.sort(key=lambda x: x.lower())
+
+        filter_params = [{'name': 'key',
+                          'type': 'text',
+                          'values': [key_placeholder] + keys,
+                          'default': key_placeholder},
+                         {'name': 'query',
+                          'type': 'text',
+                          'default': ''}]
+        return JsonResponse(
+            {
+                'f': f,
+                'params': filter_params,
+            }
+        )
