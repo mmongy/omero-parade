@@ -213,7 +213,7 @@ def get_script(request, script_name, conn):
         
     if script_name == "Dataset_Key_Value":
         query = """select oal from %sAnnotationLink as oal
-            left outer join oal.child as ch
+            left outer join fetch oal.child as ch
             left outer join fetch oal.parent as pa
             where pa.id in (:ids) and pa.class=MapAnnotation""" % dtype
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
