@@ -23,7 +23,7 @@ from omero_parade.utils import get_well_ids, get_project_image_ids
 
 
 def get_filters(request, conn):
-    return ["Rating", "Comment", "Tag", "Key_Value", "Dataset Key_Value"]
+    return ["Rating", "Comment", "Tag", "Key_Value", "Dataset_Key_Value"]
 
 
 def get_script(request, script_name, conn):
@@ -211,7 +211,7 @@ def get_script(request, script_name, conn):
             }
         )
         
-    if script_name == "Dataset Key_Value":
+    if script_name == "Dataset_Key_Value":
         query = """select oal from %sAnnotationLink as oal
             left outer join oal.child as ch
             left outer join fetch oal.parent as pa
