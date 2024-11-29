@@ -215,7 +215,7 @@ def get_script(request, script_name, conn):
         query = """select oal from %sAnnotationLink as oal
             left outer join oal.child as ch
             left outer join fetch oal.parent as pa
-            where pa.id in (:ids) and ch.class=MapAnnotation""" % dtype
+            where pa.id in (:ids) and pa.class=MapAnnotation""" % dtype
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         # Dict of {'key': {iid: 'value', iid: 'value'}}
         map_values = defaultdict(dict)
