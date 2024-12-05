@@ -28,16 +28,16 @@ def get_filters(request, conn):
 
 def get_script(request, script_name, conn):
     """Return a JS function to filter images by various params."""
-    project_id = request.GET.get('project')
-    dataset_id = request.GET.get('dataset')
-    plate_id = request.GET.get('plate')
-    image_ids = request.GET.getlist('image')
+    project_id = request.GET.get("project")
+    dataset_id = request.GET.get("dataset")
+    plate_id = request.GET.get("plate")
+    image_ids = request.GET.getlist("image")
     dtype = "Image"
     js_object_attr = "id"
     if project_id:
         obj_ids = get_project_image_ids(conn, project_id)
     elif dataset_id:
-        objects = conn.getObjects('Image', opts={'dataset': dataset_id})
+        objects = conn.getObjects("Image", opts={"dataset": dataset_id})
         obj_ids = [i.id for i in objects]
     elif plate_id:
         dtype = "Well"
@@ -52,12 +52,15 @@ def get_script(request, script_name, conn):
     params.addIds([-1] + obj_ids)
 
     if script_name == "Rating":
-        query = """select oal from %sAnnotationLink as oal
+        query = (
+            """select oal from %sAnnotationLink as oal
             join fetch oal.details.owner
             left outer join fetch oal.child as ch
             left outer join fetch oal.parent as pa
             where pa.id in (:ids) and ch.class=LongAnnotation
-            and ch.ns='openmicroscopy.org/omero/insight/rating'""" % dtype
+            and ch.ns='openmicroscopy.org/omero/insight/rating'"""
+            % dtype
+        )
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         ratings = {}
         for link in links:
@@ -73,22 +76,29 @@ def get_script(request, script_name, conn):
         })
         """ % (json.dumps(ratings), js_object_attr)
 
-        filter_params = [{'name': 'rating',
-                          'type': 'text',
-                          'values': ['-', '1', '2', '3', '4', '5'],
-                          'default': '-',
-                          }]
+        filter_params = [
+            {
+                "name": "rating",
+                "type": "text",
+                "values": ["-", "1", "2", "3", "4", "5"],
+                "default": "-",
+            }
+        ]
         return JsonResponse(
             {
-                'f': f,
-                'params': filter_params,
-            })
+                "f": f,
+                "params": filter_params,
+            }
+        )
 
     if script_name == "Comment":
-        query = """select oal from %sAnnotationLink as oal
+        query = (
+            """select oal from %sAnnotationLink as oal
             left outer join fetch oal.child as ch
             left outer join oal.parent as pa
-            where pa.id in (:ids) and ch.class=CommentAnnotation""" % dtype
+            where pa.id in (:ids) and ch.class=CommentAnnotation"""
+            % dtype
+        )
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         comments = {}
         for link in links:
@@ -109,21 +119,28 @@ def get_script(request, script_name, conn):
         })
         """ % (json.dumps(comments), js_object_attr, js_object_attr)
 
-        filter_params = [{'name': 'comment',
-                          'type': 'text',
-                          'default': '',
-                          }]
+        filter_params = [
+            {
+                "name": "comment",
+                "type": "text",
+                "default": "",
+            }
+        ]
         return JsonResponse(
             {
-                'f': f,
-                'params': filter_params,
-            })
+                "f": f,
+                "params": filter_params,
+            }
+        )
 
     if script_name == "Tag":
-        query = """select oal from %sAnnotationLink as oal
+        query = (
+            """select oal from %sAnnotationLink as oal
             left outer join fetch oal.child as ch
             left outer join oal.parent as pa
-            where pa.id in (:ids) and ch.class=TagAnnotation""" % dtype
+            where pa.id in (:ids) and ch.class=TagAnnotation"""
+            % dtype
+        )
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         tags = {}
         all_tags = []
@@ -151,71 +168,29 @@ def get_script(request, script_name, conn):
 
         all_tags.insert(0, "Choose_Tag")
 
-        filter_params = [{'name': 'tag',
-                          'type': 'text',
-                          'default': "Choose_Tag",
-                          'values': all_tags,
-                          }]
+        filter_params = [
+            {
+                "name": "tag",
+                "type": "text",
+                "default": "Choose_Tag",
+                "values": all_tags,
+            }
+        ]
         return JsonResponse(
             {
-                'f': f,
-                'params': filter_params,
-            })
-
-    if script_name == "Key_Value":
-        query = """select oal from %sAnnotationLink as oal
-            left outer join fetch oal.child as ch
-            left outer join oal.parent as pa
-            where pa.id in (:ids) and ch.class=MapAnnotation""" % dtype
-        links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
-        # Dict of {'key': {iid: 'value', iid: 'value'}}
-        map_values = defaultdict(dict)
-        for link in links:
-            iid = link.parent.id.val
-            for kv in link.child.getMapValue():
-                map_values[kv.name][iid] = kv.value
-
-        key_placeholder = "Pick key..."
-        # Return a JS function that will be passed a data object
-        # e.g. {'type': 'Image', 'id': 1}
-        # and a params object of {'paramName': value}
-        # and should return true or false
-        f = """
-            (function filter(data, params) {
-                var map_values = %s;
-                var key_placeholder = "%s";
-                if (params.key === key_placeholder) return true;
-                if (map_values[params.key] && map_values[params.key][data.%s]) {
-                    var match = map_values[params.key][data.%s].indexOf(params.query) > -1;
-                    return (params.query === '' || match);
-                }
-                    return false;
-            })
-        """ % (json.dumps(map_values), key_placeholder, js_object_attr,
-               js_object_attr)
-
-        keys = list(map_values.keys())
-        keys.sort(key=lambda x: x.lower())
-
-        filter_params = [{'name': 'key',
-                          'type': 'text',
-                          'values': [key_placeholder] + keys,
-                          'default': key_placeholder},
-                         {'name': 'query',
-                          'type': 'text',
-                          'default': ''}]
-        return JsonResponse(
-            {
-                'f': f,
-                'params': filter_params,
+                "f": f,
+                "params": filter_params,
             }
         )
-        
-    if script_name == "Dataset_Key_Value":
-        query = """select oal from %sAnnotationLink as oal
+
+    if script_name == "Key_Value":
+        query = (
+            """select oal from %sAnnotationLink as oal
             left outer join fetch oal.child as ch
-            left outer join fetch oal.parent as pa
-            where pa.id in (:ids) and pa.class=MapAnnotation""" % dtype
+            left outer join oal.parent as pa
+            where pa.id in (:ids) and ch.class=MapAnnotation"""
+            % dtype
+        )
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         # Dict of {'key': {iid: 'value', iid: 'value'}}
         map_values = defaultdict(dict)
@@ -240,22 +215,92 @@ def get_script(request, script_name, conn):
                 }
                     return false;
             })
-        """ % (json.dumps(map_values), key_placeholder, js_object_attr,
-               js_object_attr)
+        """ % (json.dumps(map_values), key_placeholder, js_object_attr, js_object_attr)
 
         keys = list(map_values.keys())
         keys.sort(key=lambda x: x.lower())
 
-        filter_params = [{'name': 'key',
-                          'type': 'text',
-                          'values': [key_placeholder] + keys,
-                          'default': key_placeholder},
-                         {'name': 'query',
-                          'type': 'text',
-                          'default': ''}]
+        filter_params = [
+            {
+                "name": "key",
+                "type": "text",
+                "values": [key_placeholder] + keys,
+                "default": key_placeholder,
+            },
+            {"name": "query", "type": "text", "default": ""},
+        ]
         return JsonResponse(
             {
-                'f': f,
-                'params': filter_params,
+                "f": f,
+                "params": filter_params,
+            }
+        )
+
+    if script_name == "Dataset_Key_Value":
+        # you need to get the Map Annotations linked to Dataset
+        params = ParametersI()
+        datasetIds = []
+        if project_id:
+            project = conn.getObject("Project", project_id)
+            datasetIds = [ds.id for ds in project.listChildren()]
+        elif dataset_id:
+            datasetIds = [dataset_id]
+        params.addIds(datasetIds)
+
+        # we need to build a dictionary of values for each Image
+        query = (
+            """select oal from DatasetAnnotationLink as oal
+            left outer join fetch oal.child as ch
+            left outer join oal.parent as pa
+            where pa.id in (:ids) and ch.class=MapAnnotation"""
+            % dtype
+        )
+
+        # for each list of Key-Value pairs, we go through all the Images in the Datasets and add the same value to our dictionary for all the images.
+        links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
+        # Dict of {'key': {iid: 'value', iid: 'value'}}
+        map_values = defaultdict(dict)
+        for l in links:
+            datasetId = l.parent.id.val
+            dataset = conn.getObject("Dataset", datasetId)
+            for image in dataset.listChildren():
+                for kv in l.child.getMapValue():
+                    iid = image.id
+                    map_values[kv.name][iid] = kv.value
+
+        key_placeholder = "Pick key..."
+        # Return a JS function that will be passed a data object
+        # e.g. {'type': 'Image', 'id': 1}
+        # and a params object of {'paramName': value}
+        # and should return true or false
+        f = """
+            (function filter(data, params) {
+                var map_values = %s;
+                var key_placeholder = "%s";
+                if (params.key === key_placeholder) return true;
+                if (map_values[params.key] && map_values[params.key][data.%s]) {
+                    var match = map_values[params.key][data.%s].indexOf(params.query) > -1;
+                    return (params.query === '' || match);
+                }
+                    return false;
+            })
+        """ % (json.dumps(map_values), key_placeholder, js_object_attr, js_object_attr)
+
+        keys = list(map_values.keys())
+        keys.sort(key=lambda x: x.lower())
+
+        filter_params = [
+            {
+                "name": "key",
+                "type": "text",
+                "values": [key_placeholder] + keys,
+                "default": key_placeholder,
+            },
+            {"name": "query", "type": "text", "default": ""},
+        ]
+        return JsonResponse(
+            {
+                "f": f,
+                "params": filter_params,
             }
         )
