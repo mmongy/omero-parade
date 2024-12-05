@@ -239,13 +239,13 @@ def get_script(request, script_name, conn):
     if script_name == "Dataset_Key_Value":
         # you need to get the Map Annotations linked to Dataset
         params = ParametersI()
-        datasetIds = []
         if project_id:
             project = conn.getObject("Project", project_id)
             datasetIds = [ds.id for ds in project.listChildren()]
+            params.addIds(datasetIds)
         elif dataset_id:
             datasetIds = [dataset_id]
-        params.addIds(datasetIds)
+            params.addIds(datasetIds)
 
         # we need to build a dictionary of values for each Image
         query = (
