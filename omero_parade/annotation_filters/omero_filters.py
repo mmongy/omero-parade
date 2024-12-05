@@ -237,9 +237,21 @@ def get_script(request, script_name, conn):
         )
 
     if script_name == "Dataset_Key_Value":
+        """
+        # we need to build a dictionary of values for each Image
+        params = ParametersI()
+        if project_id:
+            project = conn.getObject("Project", project_id)
+            datasetIds = [ds.id for ds in project.listChildren()]
+            params.addIds(datasetIds)
+        elif dataset_id:
+            datasetIds = [dataset_id]
+            params.addIds(datasetIds)
+        """
+
         # you need to get the Map Annotations linked to Dataset
         query = (
-            """select oal from DatasetAnnotationLink as oal
+            """select oal from %sDatasetAnnotationLink as oal
             left outer join fetch oal.child as ch
             left outer join oal.parent as pa
             where pa.id in (:ids) and ch.class=MapAnnotation"""
@@ -255,16 +267,6 @@ def get_script(request, script_name, conn):
                 map_values[kv.name][iid] = kv.value
 
         """
-        # we need to build a dictionary of values for each Image
-        params = ParametersI()
-        if project_id:
-            project = conn.getObject("Project", project_id)
-            datasetIds = [ds.id for ds in project.listChildren()]
-            params.addIds(datasetIds)
-        elif dataset_id:
-            datasetIds = [dataset_id]
-            params.addIds(datasetIds)
-
         # for each list of Key-Value pairs, we go through all the Images in the Datasets and add the same value to our dictionary for all the images.
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
         # Dict of {'key': {iid: 'value', iid: 'value'}}
@@ -277,6 +279,7 @@ def get_script(request, script_name, conn):
                     iid = image.id
                     map_values[kv.name][iid] = kv.value
         """
+
         key_placeholder = "Pick key..."
         # Return a JS function that will be passed a data object
         # e.g. {'type': 'Image', 'id': 1}
