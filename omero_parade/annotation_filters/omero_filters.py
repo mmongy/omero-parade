@@ -238,6 +238,24 @@ def get_script(request, script_name, conn):
 
     if script_name == "Dataset_Key_Value":
         # you need to get the Map Annotations linked to Dataset
+        query = (
+            """select oal from DatasetAnnotationLink as oal
+            left outer join fetch oal.child as ch
+            left outer join oal.parent as pa
+            where pa.id in (:ids) and ch.class=MapAnnotation"""
+            % dtype
+        )
+
+        links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
+        # Dict of {'key': {iid: 'value', iid: 'value'}}
+        map_values = defaultdict(dict)
+        for link in links:
+            iid = link.parent.id.val
+            for kv in link.child.getMapValue():
+                map_values[kv.name][iid] = kv.value
+
+        """
+        # we need to build a dictionary of values for each Image
         params = ParametersI()
         if project_id:
             project = conn.getObject("Project", project_id)
@@ -246,15 +264,6 @@ def get_script(request, script_name, conn):
         elif dataset_id:
             datasetIds = [dataset_id]
             params.addIds(datasetIds)
-
-        # we need to build a dictionary of values for each Image
-        query = (
-            """select oal from DatasetAnnotationLink as oal
-            left outer join fetch oal.child as ch
-            left outer join oal.parent as pa
-            where pa.id in (:ids) and ch.class=MapAnnotation"""
-            % dtype
-        )
 
         # for each list of Key-Value pairs, we go through all the Images in the Datasets and add the same value to our dictionary for all the images.
         links = query_service.findAllByQuery(query, params, conn.SERVICE_OPTS)
@@ -267,7 +276,7 @@ def get_script(request, script_name, conn):
                 for kv in l.child.getMapValue():
                     iid = image.id
                     map_values[kv.name][iid] = kv.value
-
+        """
         key_placeholder = "Pick key..."
         # Return a JS function that will be passed a data object
         # e.g. {'type': 'Image', 'id': 1}
